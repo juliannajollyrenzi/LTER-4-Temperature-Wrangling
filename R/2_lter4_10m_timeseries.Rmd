@@ -135,7 +135,61 @@ lter4_10m_filled %>%
 Now we only have small (<3 day) gaps. We'll interpolate to fill those. These interpolations might be smoother than actual data, but because it's only 6 days, it won't affect the overall pulse metrics.
 
 ```{r}
-
+lter4_10m_filled %>% 
+  arrange(Date) %>% 
+  # mark which days are about to be interpolated (still NA after the 20 m fill)
+  mutate(Source = ifelse(is.na(Mean_T_C), 
+                         "interpolated", 
+                         Source),
+         # linear interpolation between the days on either side (maxgap = 3 means it won't fill gaps longer than 3 days, although this shouldn't be a problem)
+         Mean_T_C = na.approx(Mean_T_C, 
+                              maxgap = 3, # overkill (no gaps are longer than 3), but just in case
+                              na.rm = FALSE), # na.rm keeps the output the same length as the input--without it, na.approx() can drop leading or trailing NAs
+         Max_T_C = na.approx(Max_T_C, maxgap = 3, na.rm = FALSE),
+         Min_T_C = na.approx(Min_T_C, maxgap = 3, na.rm = FALSE)) -> lter4_10m_final
 ```
+
+# Write CSV
+
+```{r}
+write_csv(lter4_10m_final, 
+          here("cleaned_data", "lter4_10m_filled_clean.csv"))
+```
+
+# Plot data
+
+Might be helpful for folks working with the data to have a visualization of the data and the gaps. We'll do that here
+
+```{r}
+cairo_pdf(here("figures", "lter4_10m_timeseries.pdf"), height = 3.5, width = 6.5)
+
+lter4_10m_final %>%
+  ggplot(aes(x = Date, y = Mean_T_C, color = Source, alpha = Source)) +
+  geom_point(size = 0.4) +
+  scale_color_manual(values = c("LTER_4_10m" = "gray20", 
+                                "interpolated" = "red", 
+                                "filled_LTER_4_20m" = "purple"),
+                     labels = c("LTER_4_10m" = "Measured (LTER 4 10 m)", 
+                               "interpolated" = "Linear interpolation", 
+                               "filled_LTER_4_20m" = "Filled (LTER 4 20 m + offset)")) +
+  scale_alpha_manual(values = c("LTER_4_10m" = 0.3, 
+                                "interpolated" = 1, 
+                                "filled_LTER_4_20m" = 1),
+                     labels = c("LTER_4_10m" = "Measured (LTER 4 10 m)", 
+                                "interpolated" = "Linear interpolation", 
+                                "filled_LTER_4_20m" = "Filled (LTER 4 20 m + offset)")) +
+  ylab("Daily mean temperature (C)") +
+  xlab("") +
+  ggtitle("MCR LTER 4: forereef 10 m") +
+  theme_classic() +
+  # make legend dots bigger
+  guides(color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+
+dev.off()
+```
+
+
 
 
