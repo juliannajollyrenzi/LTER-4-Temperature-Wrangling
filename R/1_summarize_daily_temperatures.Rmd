@@ -1,0 +1,44 @@
+---
+title: "Summarizing temperature data: get daily summary"
+author: "Julianna Renzi"
+date: "2026-11-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r clear environment}
+# clear environment for maximum reproducibility
+rm(list=ls())
+```
+
+```{r load packages}
+# load librarian (package for installing/loading packages)
+if (!require("librarian")) install.packages("librarian")
+
+# load requried packages
+librarian::shelf(here, # relative file paths 
+                 tidyverse, # data wrangling
+                 lubridate # dates
+                 )
+```
+
+# Read in the temperature data
+
+Data downloaded from: https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-mcr&identifier=1035&revision=20 on November 11, 2026
+
+**Recommended citation:**
+
+Moorea Coral Reef LTER, J. Leichter, T. Adam, and H. Krumbholz. 2026. MCR LTER: Coral Reef: Benthic Water Temperature, ongoing since 2005 ver 20. Environmental Data Initiative. https://doi.org/10.6073/pasta/bb8cb2232b3d00e445ece285c1f76f03 (Accessed 2026-11-11).
+
+**NOTE:** You will need to download these files off of EDI (see link above and then download the `MCR Bottom-Mounted Thermistor Zip File`) and put them into the `raw_data` folder.
+
+```{r load data}
+# temperature data
+
+```
+
+
+
