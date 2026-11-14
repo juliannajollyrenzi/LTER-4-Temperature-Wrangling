@@ -3,6 +3,8 @@ title: "Summarizing temperature data: get daily summary"
 author: "Julianna Renzi"
 date: "2026-11-14"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -27,18 +29,80 @@ librarian::shelf(here, # relative file paths
 
 # Read in the temperature data
 
-Data downloaded from: https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-mcr&identifier=1035&revision=20 on November 11, 2026
+- This script takes the full-resolution bottom-mounted thermistor files (EDI package knb-lter-mcr.1035, downloaded Nov 2026, data through July 2025) and summarizes them by day (local time). It only uses the "Backreef_Forereef" files (the fringing reef files are skipped). Run this BEFORE the time series script.
+
+- Data downloaded from: https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-mcr&identifier=1035&revision=20 
+
+- Going to focus on LTER 4 10 m, which has the fewest data gaps and is on the forereef
 
 **Recommended citation:**
 
 Moorea Coral Reef LTER, J. Leichter, T. Adam, and H. Krumbholz. 2026. MCR LTER: Coral Reef: Benthic Water Temperature, ongoing since 2005 ver 20. Environmental Data Initiative. https://doi.org/10.6073/pasta/bb8cb2232b3d00e445ece285c1f76f03 (Accessed 2026-11-11).
 
-**NOTE:** You will need to download these files off of EDI (see link above and then download the `MCR Bottom-Mounted Thermistor Zip File`) and put them into the `raw_data` folder.
+**NOTE:** You will need to download these files off of EDI (see link above and then download the `MCR Bottom-Mounted Thermistor Zip File`) and put them into the `raw_data` folder. The files are big (~400 MB each) so this takes a few minutes (downloading and also reading them in here).
 
 ```{r load data}
-# temperature data
-
+# temperature data for LTER 4
+lter4 <- read_csv(here("raw_data", "MCR_LTER_BTM_Temperature_Data_20260615", "MCR_LTER04_BTM_Backreef_Forereef_20260615.csv"),
+                  col_types = cols(time_local = col_character()))
 ```
 
+# Summarize daily values
+
+Two things to know:
+
+- The sampling interval changed: temperatures were initially every 20 min through 2021, then sampled every 1 min in 2022, and then every 2 min from 2023 on. To keep things comparable, the daily stats here use only the first reading in each 20-min window (72 readings/day in every year)
+- A day is only kept if the sensor recorded in at least 20 of the 24 hours. Some days only have ~1 hr missing (likely a sensor change when it also changes in the sampling interval), but there are some days with longer gaps (likely where technicians took the instrument out back onto land to download data, etc.)--those longer gaps mean the day is dropped and filled via other mechanisms
+
+```{r}
+lter4 %>% 
+  # pull out date-time components and put them in their own columns
+  mutate(Date = as.Date(substr(time_local, 1, 10)),
+         Hour = substr(time_local, 12, 13),
+         Minute = as.numeric(substr(time_local, 15, 16)),
+         # turn the minute into 0, 1 or 2, for minutes 0–19, 20–39 and 40–59
+         Bin_20min = floor(Minute/20)) %>% 
+  # make sure they're in order (should be already)
+  arrange(site, reef_type_code, sensor_depth_m, time_local) %>% 
+  # keep the first reading in each 20-min window so all years have 72 readings/day (keeps first row per sensor, per day, per hour, per 20-minute window)
+  distinct(site, reef_type_code, sensor_depth_m, Date, 
+           Hour, Bin_20min, .keep_all = TRUE) %>% 
+  group_by(site, reef_type_code, sensor_depth_m, Date) %>% 
+  summarize(Mean_T_C = mean(temperature_c),
+            Max_T_C = max(temperature_c),
+            Min_T_C = min(temperature_c),
+            N_obs = n(),
+            N_hours = n_distinct(Hour)) %>% 
+  ungroup() -> therms_daily
+```
+
+Now we have daily temperatures, but there are gaps and not all days have all 24 hrs accounted for. Check how many are missing >20 hrs of data:
+
+```{r}
+# how many partial days are there?
+therms_daily %>%
+  count(N_hours >= 20) # 0.19%
+```
+
+Now filter out days without enough data (20 hr threshold)
+
+```{r}
+therms_daily %>%
+  filter(N_hours >= 20) %>%
+  # make columns nicer for plotting, etc.
+  rename(Site = site) %>%
+  mutate(reef_type_code = case_when(reef_type_code == "Forereef" ~ "FOR",
+                                    reef_type_code == "Backreef" ~ "BAK")) %>%
+  mutate(Range_T_C = Max_T_C - Min_T_C) %>%
+  select(Site, reef_type_code, sensor_depth_m, Date, Mean_T_C, Max_T_C, Min_T_C, Range_T_C, N_obs) %>%
+  arrange(Site, reef_type_code, sensor_depth_m, Date) -> therms_daily_20hr
+```
+
+# Write cleaned file
+
+```{r}
+write_csv(therms_daily_20hr, 
+          here("cleaned_data", "LTER4_daily_summary_20hr_filter.csv"))
+```
 
 
