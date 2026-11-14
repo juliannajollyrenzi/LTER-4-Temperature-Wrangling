@@ -3,28 +3,77 @@ title: "Make continuous temperature time series: LTER 4 10m"
 author: "Julianna Renzi"
 date: "2026-11-14"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r clear environment}
+# clear environment for maximum reproducibility
+rm(list=ls())
 ```
 
-## Including Plots
+```{r load packages}
+# load librarian (package for installing/loading packages)
+if (!require("librarian")) install.packages("librarian")
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+# load requried packages
+librarian::shelf(here, # relative file paths 
+                 tidyverse, # data wrangling
+                 lubridate, # dates
+                 zoo # for interpolation
+                 )
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# Read in the daily temperature data
+
+Note these cleaned and filtered (>=20hrs of coverage/day) daily data were generated using the `1_summarize_daily_temperatures.Rmd` script. In this script, we'll fill gaps in the time series by borrowing from other sensors, produce some figures for collaborators, and then export a cleaned csv for downstream analyses.
+
+```{r}
+lter4 <- read_csv(here("cleaned_data", "LTER4_daily_summary_20hr_filter.csv")) 
+```
+
+# Examine gaps in LTER4
+
+Get a list of all gaps across forereef sensors
+
+```{r}
+lter4 %>%
+  filter(reef_type_code == "FOR") %>%
+  mutate(Sensor = paste0(Site, "_", sensor_depth_m, "m")) %>% 
+  arrange(Sensor, Date) %>%
+  group_by(Site, sensor_depth_m, Sensor) %>% 
+  # get number of days between each observation (would be 1 if no days between)
+  mutate(Gap_days = as.numeric(Date - lag(Date)) - 1) %>%
+  filter(Gap_days > 0) %>%
+  mutate(Gap_start = Date - Gap_days,
+         Gap_end = Date - 1) %>%
+  ungroup() %>%
+  select(Site, sensor_depth_m, Gap_start, Gap_end, Gap_days) -> gap_table
+```
+
+See in `gap_table` that there are only 5 gaps to fill at 10m, most of which are small (1-2 days), and only one of which is big (16 days). Write this to a csv for collaborators:
+
+```{r}
+gap_table %>% 
+  filter(sensor_depth_m == 10) %>% 
+  write_csv(here("cleaned_data", "lter4_10m_data_gaps.csv"))
+```
+
+# Fill large gap with 20 m sensor
+
+LTER 4 20m has data for the largest gap in the 10m time series. We'll borrow from that timeseries to gap fill.
+
+```{r}
+
+```
+
+
+# Interpolate small gaps
+
+Now we only have small (<3 day) gaps. We'll interpolate to fill those.
+
+
