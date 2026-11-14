@@ -48,3 +48,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# raw CSV files (for big LTER data)
+raw_data/MCR_LTER_BTM_Temperature_Data_20260615/*
