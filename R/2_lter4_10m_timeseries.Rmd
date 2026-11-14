@@ -68,12 +68,74 @@ gap_table %>%
 LTER 4 20m has data for the largest gap in the 10m time series. We'll borrow from that timeseries to gap fill.
 
 ```{r}
+# pull out the 10 m and 20 m forereef sensors
+lter4 %>% 
+  filter(reef_type_code == "FOR", sensor_depth_m == 10) %>% 
+  select(Date, Mean_T_C, Max_T_C, Min_T_C) -> lter4_10m
 
+lter4 %>% 
+  filter(reef_type_code == "FOR", sensor_depth_m == 20) %>% 
+  # rename temperatures to note they are 20m
+  select(Date, Mean_20m = Mean_T_C, Max_20m = Max_T_C, Min_20m = Min_T_C) -> lter4_20m
 ```
 
+Get the monthly average difference between the two depths (difference varies seasonally), which we can use as a correction factor when gap filling using the 20m data
+
+```{r}
+# average difference between 10 m and 20 m for each month of the year (from days when both were recording)
+lter4_10m %>% 
+  # use inner_join to just get dates they share
+  inner_join(lter4_20m, by = "Date") %>% 
+  group_by(Month = month(Date)) %>% 
+  summarize(Mean_offset = mean(Mean_T_C - Mean_20m),
+            Max_offset = mean(Max_T_C - Max_20m),
+            Min_offset = mean(Min_T_C - Min_20m)) -> offsets
+```
+
+Fill gaps
+
+```{r}
+# make a row for every day so the gaps show up as NAs, then fill them from 20 m + the monthly offset
+tibble(Date = seq(min(lter4_10m$Date), 
+                  max(lter4_10m$Date), by = "day")) %>% 
+  left_join(lter4_10m, by = "Date") %>% 
+  left_join(lter4_20m, by = "Date") %>% 
+  # get a date column to join date-specific offsets
+  mutate(Month = month(Date)) %>% 
+  left_join(offsets, by = "Month") %>% 
+  # make a "source" column so it's clear when data are from 20m (in cases where there are no 10m data but there are 20m data)
+  mutate(Source = case_when(!is.na(Mean_T_C) ~ "LTER_4_10m",
+                            !is.na(Mean_20m) ~ "filled_LTER_4_20m"),
+         Mean_T_C = ifelse(is.na(Mean_T_C), 
+                           Mean_20m + Mean_offset, # if 10m is NA, use the 20m value and add the offset--if 20m is also NA, will still be NA (will deal with those later)
+                           Mean_T_C),
+         Max_T_C = ifelse(is.na(Max_T_C), 
+                          Max_20m + Max_offset, 
+                          Max_T_C),
+         Min_T_C = ifelse(is.na(Min_T_C), 
+                          Min_20m + Min_offset, 
+                          Min_T_C)) %>% 
+  # then just get the columns we want (don't need 20m anymore)
+  select(Date, Mean_T_C, Max_T_C, Min_T_C, Source) -> lter4_10m_filled
+```
+Check what got filled and what's still missing (should just be small gaps left)
+
+```{r}
+# check: what got filled and what's still missing?
+lter4_10m_filled %>% 
+  count(Source) # 15 filled days, 6,765 actual days, and 6 days remaining to be filled
+
+# check dates that need filling
+lter4_10m_filled %>% 
+  filter(is.na(Mean_T_C))
+```
 
 # Interpolate small gaps
 
-Now we only have small (<3 day) gaps. We'll interpolate to fill those.
+Now we only have small (<3 day) gaps. We'll interpolate to fill those. These interpolations might be smoother than actual data, but because it's only 6 days, it won't affect the overall pulse metrics.
+
+```{r}
+
+```
 
 
